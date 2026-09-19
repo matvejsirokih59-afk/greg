@@ -1,4 +1,4 @@
---[[ Auto Steal an Egg | Наш скрипт ]]
+-- Auto Steal an Egg | Меню появляется всегда
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local LP = Players.LocalPlayer
@@ -8,21 +8,25 @@ local Rarities = {Divine=true,Eternal=true,Secret=true,Cosmic=true,Mythic=true,L
 local Priority = {Divine=10,Eternal=9,Secret=8,Cosmic=7,Mythic=6,Legendary=5,Epic=4,Rare=3,Uncommon=2,Common=1}
 
 local Steal = nil
-for _, v in ipairs(RS:GetDescendants()) do
-    if v:IsA("RemoteEvent") then
-        local n = v.Name:lower()
-        if n:find("steal") or n:find("takeegg") or n:find("eggsteal") then Steal = v break end
+local function findSteal()
+    for _, v in ipairs(RS:GetDescendants()) do
+        if v:IsA("RemoteEvent") then
+            local n = v.Name:lower()
+            if n:find("steal") or n:find("takeegg") or n:find("eggsteal") then
+                return v
+            end
+        end
     end
+    return nil
 end
-if not Steal then warn("[AutoSteal] RemoteEvent не найден!") return end
-print("[AutoSteal] RemoteEvent: " .. Steal:GetFullName())
 
+-- GUI (создаётся сразу)
 local gui = Instance.new("ScreenGui")
 gui.Name = "AutoStealGui" gui.ResetOnSpawn = false
 gui.Parent = LP:WaitForChild("PlayerGui")
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0,200,0,400) frame.Position = UDim2.new(0,20,0,60)
+frame.Size = UDim2.new(0,200,0,430) frame.Position = UDim2.new(0,20,0,60)
 frame.BackgroundColor3 = Color3.fromRGB(25,25,30) frame.BorderSizePixel = 0
 frame.Parent = gui
 
@@ -31,33 +35,63 @@ title.Size = UDim2.new(1,0,0,28) title.BackgroundColor3 = Color3.fromRGB(45,45,5
 title.TextColor3 = Color3.fromRGB(255,255,255) title.Text = "Auto Steal an Egg"
 title.Font = Enum.Font.GothamBold title.TextSize = 13 title.Parent = frame
 
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1,0,0,30) status.Position = UDim2.new(0,0,0,32)
+status.BackgroundTransparency = 1 status.TextColor3 = Color3.fromRGB(255,200,100)
+status.Text = "Поиск RemoteEvent..." status.Font = Enum.Font.Gotham
+status.TextSize = 11 status.TextWrapped = true status.Parent = frame
+
+local findBtn = Instance.new("TextButton")
+findBtn.Size = UDim2.new(0,160,0,26) findBtn.Position = UDim2.new(0,20,0,66)
+findBtn.BackgroundColor3 = Color3.fromRGB(60,60,120) findBtn.TextColor3 = Color3.fromRGB(255,255,255)
+findBtn.Text = "Найти RemoteEvent" findBtn.Font = Enum.Font.GothamBold
+findBtn.TextSize = 11 findBtn.Parent = frame
+
 local toggle = Instance.new("TextButton")
-toggle.Size = UDim2.new(0,160,0,32) toggle.Position = UDim2.new(0,20,0,38)
+toggle.Size = UDim2.new(0,160,0,32) toggle.Position = UDim2.new(0,20,0,100)
 toggle.BackgroundColor3 = Color3.fromRGB(50,150,50) toggle.TextColor3 = Color3.fromRGB(255,255,255)
 toggle.Text = "ВКЛЮЧИТЬ" toggle.Font = Enum.Font.GothamBold toggle.TextSize = 13
 toggle.Parent = frame
 
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1,0,0,18) status.Position = UDim2.new(0,0,0,76)
-status.BackgroundTransparency = 1 status.TextColor3 = Color3.fromRGB(200,200,200)
-status.Text = "Статус: выключено" status.Font = Enum.Font.Gotham
-status.TextSize = 11 status.Parent = frame
-
-local y = 100
+local y = 142
 for name, enabled in pairs(Rarities) do
     local check = Instance.new("TextButton")
-    check.Size = UDim2.new(0,160,0,24) check.Position = UDim2.new(0,20,0,y)
+    check.Size = UDim2.new(0,160,0,22) check.Position = UDim2.new(0,20,0,y)
     check.BackgroundColor3 = enabled and Color3.fromRGB(40,100,40) or Color3.fromRGB(45,45,45)
     check.TextColor3 = Color3.fromRGB(255,255,255)
     check.Text = name .. ": " .. (enabled and "ON" or "OFF")
-    check.Font = Enum.Font.Gotham check.TextSize = 11 check.Parent = frame
+    check.Font = Enum.Font.Gotham check.TextSize = 10 check.Parent = frame
     check.MouseButton1Click:Connect(function()
         Rarities[name] = not Rarities[name]
         check.Text = name .. ": " .. (Rarities[name] and "ON" or "OFF")
         check.BackgroundColor3 = Rarities[name] and Color3.fromRGB(40,100,40) or Color3.fromRGB(45,45,45)
     end)
-    y = y + 26
+    y = y + 24
 end
+
+-- Поиск RemoteEvent
+Steal = findSteal()
+if Steal then
+    status.Text = "RemoteEvent найден: " .. Steal.Name
+    status.TextColor3 = Color3.fromRGB(100,255,100)
+else
+    status.Text = "RemoteEvent не найден! Нажми кнопку ниже."
+    status.TextColor3 = Color3.fromRGB(255,100,100)
+end
+
+findBtn.MouseButton1Click:Connect(function()
+    print("=== Поиск RemoteEvent ===")
+    local found = false
+    for _, v in ipairs(RS:GetDescendants()) do
+        if v:IsA("RemoteEvent") then
+            print("RemoteEvent: " .. v:GetFullName())
+            found = true
+        end
+    end
+    if not found then print("RemoteEvent'ов в ReplicatedStorage нет.") end
+    print("=== Конец списка ===")
+    status.Text = "Список в консоли (F9). Найди 'steal' и впиши имя."
+end)
 
 local running, origSpeed = false, nil
 
@@ -114,6 +148,7 @@ end
 task.spawn(function()
     while task.wait(WAIT_T) do
         if not running then continue end
+        if not Steal then status.Text = "Нет RemoteEvent!" continue end
         local ch = LP.Character
         local h = ch and ch:FindFirstChildOfClass("Humanoid")
         if h then h.WalkSpeed = SPEED else continue end
@@ -129,6 +164,7 @@ task.spawn(function()
 end)
 
 toggle.MouseButton1Click:Connect(function()
+    if not Steal then status.Text = "Сначала найди RemoteEvent!" return end
     running = not running
     toggle.Text = running and "ВЫКЛЮЧИТЬ" or "ВКЛЮЧИТЬ"
     toggle.BackgroundColor3 = running and Color3.fromRGB(150,50,50) or Color3.fromRGB(50,150,50)
