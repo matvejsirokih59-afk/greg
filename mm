@@ -1,12 +1,14 @@
---[[ Steal an Egg | Ultimate v6 | SPEED 300 + мгновенный ТП ]]
+--[[ Steal an Egg | Ultimate v7 | без смерти при ТП ]]
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local LP = Players.LocalPlayer
 
 local S = {
     Auto = false, ReturnHome = false,
-    FlySpeed = 300,        -- снижено до 300
-    Range = 6, Delay = 0.05,
+    FlySpeed = 300,
+    StopDist = 12,       -- больше, чтобы не пролетать яйцо
+    Range = 10,
+    Delay = 0.05,
     HomePos = nil,
     Rarities = {Common=true,Uncommon=true,Rare=true,Epic=true,Legendary=true,Mythic=true,Cosmic=true,Secret=true,Eternal=true,Divine=true},
 }
@@ -103,9 +105,38 @@ local function bestEgg()
     return b
 end
 
--- Полёт со скоростью 300
+-- Обнуление скорости (чтобы не убило после ТП)
+local function zeroVelocity()
+    local ch = LP.Character
+    if not ch then return end
+    local hrp = ch:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        hrp.Velocity = Vector3.zero
+    end
+end
+
+-- Безопасный ТП
+local function tpTo(pos)
+    local ch = LP.Character
+    local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+    local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+    if not (hrp and hum) then return end
+    -- сброс состояния перед ТП
+    hum.PlatformStand = true
+    zeroVelocity()
+    hrp.CFrame = CFrame.new(pos + Vector3.new(0, 6, 0))  -- +6 чтобы не застрять
+    -- сразу гасим скорость
+    zeroVelocity()
+    task.wait(0.05)
+    zeroVelocity()
+    hum.PlatformStand = false
+end
+
+-- Полёт с защитой от перелёта
 local function flyTo(pos, stopDist)
-    stopDist = stopDist or 4
+    stopDist = stopDist or S.StopDist
     local ch = LP.Character
     local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
     local hum = ch and ch:FindFirstChildOfClass("Humanoid")
@@ -118,25 +149,24 @@ local function flyTo(pos, stopDist)
     while S.Auto and tick() - t < 6 do
         if not hrp.Parent then break end
         local diff = pos - hrp.Position
-        if diff.Magnitude < stopDist then ok = true break end
-        bv.Velocity = diff.Unit * S.FlySpeed
+        local dist = diff.Magnitude
+        if dist < stopDist then ok = true break end
+        -- плавное торможение около цели
+        local speed = S.FlySpeed
+        if dist < stopDist * 3 then
+            speed = math.max(50, S.FlySpeed * (dist / (stopDist * 3)))
+        end
+        bv.Velocity = diff.Unit * speed
         task.wait()
     end
     bv:Destroy()
+    zeroVelocity()
     if hum then hum.PlatformStand = false end
     return ok
 end
 
--- Мгновенный ТП
-local function tpTo(pos)
-    local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    if hrp then hrp.CFrame = CFrame.new(pos + Vector3.new(0,3,0)) end
-end
-
 local function flyHome()
-    if S.HomePos then
-        tpTo(S.HomePos)
-    end
+    if S.HomePos then tpTo(S.HomePos) end
 end
 
 local function doSteal(e)
@@ -153,26 +183,27 @@ task.spawn(function()
     while task.wait(0.1) do
         if not S.Auto then continue end
 
-        -- 1) Ближайшее яйцо — быстро долетел, взял, сбросил
+        -- 1) Ближайшее яйцо — долетел, взял, СРАЗУ сбросил
         local near = nearestEgg()
         if near then
             Status.Text = "1/3 → ближайшее: "..near.model.Name
-            flyTo(near.model.Position, S.Range)
+            flyTo(near.model.Position, S.StopDist)
             doSteal(near)
-            -- без пауз — сразу сброс
+            task.wait(0.05)
             doDrop()
+            task.wait(0.05)
         end
 
-        -- 2) МГНОВЕННЫЙ ТП к целевому яйцу
+        -- 2) РЕЗКИЙ ТП к целевому (со сбросом скорости)
         local target = bestEgg()
         if target then
             Status.Text = "2/3 ТП → "..target.model.Name.." ("..target.rarity..")"
             tpTo(target.model.Position)
-            -- сразу крадём (ТП на месте — prompt уже рядом)
+            task.wait(0.05)
             doSteal(target)
             task.wait(S.Delay)
 
-            -- 3) МГНОВЕННЫЙ ТП на базу
+            -- 3) РЕЗКИЙ ТП на базу
             if S.ReturnHome and S.HomePos then
                 Status.Text = "3/3 ТП → база"
                 flyHome()
@@ -186,7 +217,7 @@ end)
 
 -- GUI
 local g = Instance.new("ScreenGui")
-g.Name = "UltimateV6" g.ResetOnSpawn = false
+g.Name = "UltimateV7" g.ResetOnSpawn = false
 g.Parent = LP:WaitForChild("PlayerGui")
 
 local F = Instance.new("Frame", g)
@@ -197,7 +228,7 @@ Instance.new("UICorner", F).CornerRadius = UDim.new(0,10)
 
 local T = Instance.new("TextLabel", F)
 T.Size = UDim2.new(1,0,0,34) T.BackgroundColor3 = Color3.fromRGB(34,34,46)
-T.TextColor3 = Color3.fromRGB(255,255,255) T.Text = "⚡ Steal an Egg v6 | Speed 300"
+T.TextColor3 = Color3.fromRGB(255,255,255) T.Text = "⚡ Steal an Egg v7 | Anti-Death"
 T.Font = Enum.Font.GothamBold T.TextSize = 14
 Instance.new("UICorner", T).CornerRadius = UDim.new(0,10)
 
@@ -246,7 +277,7 @@ local retBtn = mkBtn("🔄 Возврат: ВЫКЛ", Color3.fromRGB(45,45,65), 
 end)
 
 mkBtn("🔍 Диагностика (F9)", Color3.fromRGB(120,80,30), function()
-    print("=== ДИАГНОСТИКА v6 ===")
+    print("=== ДИАГНОСТИКА v7 ===")
     print("Steal:", StealRemote and StealRemote:GetFullName() or "нет")
     print("Drop:", DropRemote and DropRemote:GetFullName() or "нет")
     local list = scan()
