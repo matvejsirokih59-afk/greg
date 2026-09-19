@@ -1,28 +1,25 @@
---[[ Steal an Egg | Ultimate v5 | BLAZING FAST ]]
+--[[ Steal an Egg | Ultimate v6 | SPEED 300 + мгновенный ТП ]]
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local LP = Players.LocalPlayer
 
 local S = {
     Auto = false, ReturnHome = false,
-    FlySpeed = 500,        -- скорость полёта
-    Range = 8, Delay = 0.15,
+    FlySpeed = 300,        -- снижено до 300
+    Range = 6, Delay = 0.05,
     HomePos = nil,
     Rarities = {Common=true,Uncommon=true,Rare=true,Epic=true,Legendary=true,Mythic=true,Cosmic=true,Secret=true,Eternal=true,Divine=true},
 }
 local prio = {Divine=10,Eternal=9,Secret=8,Cosmic=7,Mythic=6,Legendary=5,Epic=4,Rare=3,Uncommon=2,Common=1}
 
--- RemoteEvent кражи + сброса/выброса
 local StealRemote, DropRemote
 for _, o in ipairs(RS:GetDescendants()) do
     if o:IsA("RemoteEvent") then
         local n = o.Name:lower()
         if not StealRemote and (n:find("steal") or n:find("takeegg") or n:find("eggsteal")) then StealRemote = o end
-        if not DropRemote and (n:find("drop") or n:find("removeegg") or n:find("clear")) then DropRemote = o end
+        if not DropRemote and (n:find("drop") or n:find("removeegg") or n:find("clear") or n:find("discard")) then DropRemote = o end
     end
 end
-print("[v5] Steal:", StealRemote and StealRemote.Name or "нет")
-print("[v5] Drop:", DropRemote and DropRemote.Name or "нет")
 
 local function getRarity(o)
     for _, a in ipairs({"Rarity","rarity","EggRarity","Tier"}) do
@@ -52,7 +49,7 @@ local function isEgg(o)
 end
 
 local Cache, LastScan = {}, 0
-local SCAN_INT = 1.2
+local SCAN_INT = 0.8
 local function scan()
     local now = tick()
     if now - LastScan < SCAN_INT then return Cache end
@@ -81,17 +78,6 @@ local function scan()
     return list
 end
 
-local function bestEgg()
-    local b, sc = nil, -1
-    local myId = tostring(LP.UserId)
-    for _, e in ipairs(scan()) do
-        if e.owner ~= myId and S.Rarities[e.rarity] and (prio[e.rarity] or 0) > sc then
-            sc = prio[e.rarity] b = e
-        end
-    end
-    return b
-end
-
 local function nearestEgg()
     local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
@@ -106,7 +92,18 @@ local function nearestEgg()
     return b
 end
 
--- БЫСТРЫЙ полёт через BodyVelocity
+local function bestEgg()
+    local b, sc = nil, -1
+    local myId = tostring(LP.UserId)
+    for _, e in ipairs(scan()) do
+        if e.owner ~= myId and S.Rarities[e.rarity] and (prio[e.rarity] or 0) > sc then
+            sc = prio[e.rarity] b = e
+        end
+    end
+    return b
+end
+
+-- Полёт со скоростью 300
 local function flyTo(pos, stopDist)
     stopDist = stopDist or 4
     local ch = LP.Character
@@ -118,7 +115,7 @@ local function flyTo(pos, stopDist)
     bv.MaxForce = Vector3.new(1e6,1e6,1e6)
     local t = tick()
     local ok = false
-    while S.Auto and tick() - t < 5 do
+    while S.Auto and tick() - t < 6 do
         if not hrp.Parent then break end
         local diff = pos - hrp.Position
         if diff.Magnitude < stopDist then ok = true break end
@@ -138,13 +135,7 @@ end
 
 local function flyHome()
     if S.HomePos then
-        tpTo(S.HomePos)  -- моментально
-        -- на всякий случай — если ТП откатили
-        task.wait(0.05)
-        local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-        if hrp and (hrp.Position - S.HomePos).Magnitude > 10 then
-            flyTo(S.HomePos, 4)
-        end
+        tpTo(S.HomePos)
     end
 end
 
@@ -162,32 +153,30 @@ task.spawn(function()
     while task.wait(0.1) do
         if not S.Auto then continue end
 
-        -- 1) Хватаем ближайшее яйцо (чтобы освободить/занять руки)
+        -- 1) Ближайшее яйцо — быстро долетел, взял, сбросил
         local near = nearestEgg()
         if near then
-            Status.Text = "1/3 Ближайшее: "..near.model.Name
+            Status.Text = "1/3 → ближайшее: "..near.model.Name
             flyTo(near.model.Position, S.Range)
             doSteal(near)
-            task.wait(0.1)
-            doDrop()  -- сразу сбросить
-            task.wait(0.1)
+            -- без пауз — сразу сброс
+            doDrop()
         end
 
-        -- 2) ТП к нужному (самому редкому)
+        -- 2) МГНОВЕННЫЙ ТП к целевому яйцу
         local target = bestEgg()
         if target then
-            Status.Text = "2/3 ТП к: "..target.model.Name.." ("..target.rarity..")"
+            Status.Text = "2/3 ТП → "..target.model.Name.." ("..target.rarity..")"
             tpTo(target.model.Position)
-            task.wait(0.15)
-            flyTo(target.model.Position, S.Range)
+            -- сразу крадём (ТП на месте — prompt уже рядом)
             doSteal(target)
             task.wait(S.Delay)
 
-            -- 3) Быстро на базу
-            if S.ReturnHome then
-                Status.Text = "3/3 На базу"
+            -- 3) МГНОВЕННЫЙ ТП на базу
+            if S.ReturnHome and S.HomePos then
+                Status.Text = "3/3 ТП → база"
                 flyHome()
-                task.wait(0.1)
+                task.wait(0.05)
             end
         else
             Status.Text = "Нет подходящих яиц"
@@ -197,7 +186,7 @@ end)
 
 -- GUI
 local g = Instance.new("ScreenGui")
-g.Name = "UltimateV5" g.ResetOnSpawn = false
+g.Name = "UltimateV6" g.ResetOnSpawn = false
 g.Parent = LP:WaitForChild("PlayerGui")
 
 local F = Instance.new("Frame", g)
@@ -208,7 +197,7 @@ Instance.new("UICorner", F).CornerRadius = UDim.new(0,10)
 
 local T = Instance.new("TextLabel", F)
 T.Size = UDim2.new(1,0,0,34) T.BackgroundColor3 = Color3.fromRGB(34,34,46)
-T.TextColor3 = Color3.fromRGB(255,255,255) T.Text = "⚡ Steal an Egg v5 | BLAZING"
+T.TextColor3 = Color3.fromRGB(255,255,255) T.Text = "⚡ Steal an Egg v6 | Speed 300"
 T.Font = Enum.Font.GothamBold T.TextSize = 14
 Instance.new("UICorner", T).CornerRadius = UDim.new(0,10)
 
@@ -257,7 +246,7 @@ local retBtn = mkBtn("🔄 Возврат: ВЫКЛ", Color3.fromRGB(45,45,65), 
 end)
 
 mkBtn("🔍 Диагностика (F9)", Color3.fromRGB(120,80,30), function()
-    print("=== ДИАГНОСТИКА v5 ===")
+    print("=== ДИАГНОСТИКА v6 ===")
     print("Steal:", StealRemote and StealRemote:GetFullName() or "нет")
     print("Drop:", DropRemote and DropRemote:GetFullName() or "нет")
     local list = scan()
